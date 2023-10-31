@@ -3,7 +3,7 @@ use rand::prelude::*;
 
 const START_ADDRESS: u32 = 0x200;
 const FONTSET_SIZE: u32 = 80;
-const FONTSET_START_ADDRESS: u32 = 0x50;
+const FONTSET_START_ADDRESS: u8 = 0x50;
 const VIDEO_WIDTH: u32 = 680;
 const VIDEO_HEIGHT: u32 = 320;
 
@@ -261,14 +261,119 @@ impl Chip8 {
         let Vy: u8 = ((self.opcode & 0x00F0) >> 4).try_into().unwrap();
         let height: u8 = (self.opcode & 0x000F).try_into().unwrap();
 
-        let xPos: u8 = self.registers[Vx as usize].try_into().unwrap() % VIDEO_WIDTH;
-        let yPos: u8 = self.registers[Vy as usize].try_into().unwrap() % VIDEO_HEIGHT;
+        let xPos: u8 = (self.registers[Vx as usize] as u32 % VIDEO_WIDTH).try_into().unwrap();
+        let yPos: u8 = (self.registers[Vy as usize] as u32 % VIDEO_HEIGHT).try_into().unwrap();
 
         self.registers[0xF] = 0;
+        
+        let row = 0;
+        
+        while row < height {
+            let sprite_byte: u8 = self.memory[self.index as usize + row as usize];
+            let col = 0;
 
-        for row in [0..height] {
-            let spriteByte: u8 = self.memory[self.index as usize + row as usize];
+            while col < 8 {
+                let sprite_pixel: u8 = sprite_byte & (0x80 >> col);
+                let mut screen_pixel = self.video[(yPos + row) as usize * VIDEO_WIDTH as usize + (xPos + col) as usize];
+
+                if sprite_pixel != 0 {
+                    if screen_pixel == 0xFFFFFFFF {
+                        self.registers[0xF] = 1;
+                    }
+
+                    screen_pixel ^= 0xFFFFFFFF;
+                }
+            }
         }
+    }
+
+    pub fn OP_Ex9E(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+        let key: u8 = self.registers[Vx as usize];
+
+        if self.keypad[key as usize] != 0 {
+            self.pc += 2;
+        }
+    }
+
+    pub fn OP_ExA1(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+        let key: u8 = self.registers[Vx as usize];
+
+        if self.keypad[key as usize] == 0 {
+            self.pc += 2;
+        }
+    }
+
+    pub fn OP_Fx07(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+
+        self.registers[Vx as usize] = self.delay_timer;
+    }
+
+    pub fn OP_Fx0A(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+
+        if self.keypad[0] != 0 {
+            self.registers[Vx as usize] = 0;
+        } else if self.keypad[1] != 0 {
+            self.registers[Vx as usize] = 1;
+        } else if self.keypad[2] != 0 {
+            self.registers[Vx as usize] = 2;
+        } else if self.keypad[3] != 0 {
+            self.registers[Vx as usize] = 3;
+        } else if self.keypad[4] != 0 {
+            self.registers[Vx as usize] = 4;
+        } else if self.keypad[5] != 0 {
+            self.registers[Vx as usize] = 5;
+        } else if self.keypad[6] != 0 {
+            self.registers[Vx as usize] = 6;
+        } else if self.keypad[7] != 0 {
+            self.registers[Vx as usize] = 7;
+        } else if self.keypad[8] != 0 {
+            self.registers[Vx as usize] = 8;
+        } else if self.keypad[9] != 0 {
+            self.registers[Vx as usize] = 9;
+        } else if self.keypad[10] != 0 {
+            self.registers[Vx as usize] = 10;
+        } else if self.keypad[11] != 0 {
+            self.registers[Vx as usize] = 11;
+        } else if self.keypad[12] != 0 {
+            self.registers[Vx as usize] = 12;
+        } else if self.keypad[13] != 0 {
+            self.registers[Vx as usize] = 13;
+        } else if self.keypad[14] != 0 {
+            self.registers[Vx as usize] = 14;
+        } else if self.keypad[15] != 0 {
+            self.registers[Vx as usize] = 15;
+        } else {
+            self.pc -= 2;
+        }
+    }
+
+    pub fn OP_Fx15(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+
+        self.delay_timer = self.registers[Vx as usize];
+    }
+
+    pub fn OP_Fx18(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+
+        self.sound_timer = self.registers[Vx as usize];
+    }
+
+    pub fn OP_Fx1E(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+
+        self.index += self.registers[Vx as usize] as u16;
+    }
+
+    pub fn OP_Fx29(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+        let digit: u8 = self.registers[Vx as usize];
+
+        self.index = (FONTSET_START_ADDRESS + (5 * digit)) as u16;
     }
 }
 
