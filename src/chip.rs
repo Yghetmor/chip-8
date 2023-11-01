@@ -7,7 +7,7 @@ const FONTSET_START_ADDRESS: u8 = 0x50;
 const VIDEO_WIDTH: u32 = 680;
 const VIDEO_HEIGHT: u32 = 320;
 
-const fontset: [u8; FONTSET_SIZE as usize] = [
+const FONTSET: [u8; FONTSET_SIZE as usize] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
 	0x20, 0x60, 0x20, 0x20, 0x70, // 1
 	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -38,7 +38,7 @@ pub struct Chip8 {
     keypad: [u8; 16],
     video: [u32; 64 * 32],
     opcode: u16,
-    randByte: u8,
+    rand_byte: u8,
 }
 
 impl Chip8 {
@@ -55,21 +55,21 @@ impl Chip8 {
             keypad : [0; 16],
             video : [0; 64 * 32],
             opcode : 0,
-            randByte : 0,
+            rand_byte : 0,
         };
 
         let mut i = 0;
-        for elem in fontset {
+        for elem in FONTSET {
             chip.memory[(FONTSET_START_ADDRESS + i) as usize] = elem;
             i += 1;
         }
 
-        chip.randByte = random();
+        chip.rand_byte = random();
 
         chip
     }
 
-    pub fn LoadROM(&mut self, filename: String) {
+    pub fn load_rom(&mut self, filename: String) {
         let buf = read(filename).unwrap();
         let mut _i = 0;
         for byte in buf {
@@ -374,6 +374,104 @@ impl Chip8 {
         let digit: u8 = self.registers[Vx as usize];
 
         self.index = (FONTSET_START_ADDRESS + (5 * digit)) as u16;
+    }
+
+    pub fn OP_Fx33(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+        let mut value: u8 = self.registers[Vx as usize];
+
+        self.memory[self.index as usize + 2] = value % 10;
+        value /= 10;
+
+        self.memory[self.index as usize + 1] = value % 10;
+        value /=10;
+
+        self.memory[self.index as usize] = value % 10;
+    }
+
+    pub fn OP_Fx55(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+
+        let mut i = 0;
+        while i <= Vx {
+            self.memory[self.index as usize + i as usize] = self.registers[i as usize];
+            i += 1;
+        }
+    }
+
+    pub fn OP_Fx65(&mut self) {
+        let Vx: u8 = ((self.opcode & 0x0F00) >> 8).try_into().unwrap();
+
+        let mut i = 0;
+        while i <= Vx {
+            self.registers[i as usize] = self.memory[self.index as usize + i as usize];
+            i += 1;
+        }
+    }
+
+    pub fn cycle(&mut self) {
+        self.opcode = ((self.memory[self.pc as usize] as u16) << 8) | self.memory[self.pc as usize + 1] as u16;
+
+        self.pc += 2;
+
+        self.decode_n_exe();
+
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+        }
+    }
+
+    fn decode_n_exe(&mut self) {
+        match (self.opcode & 0xF000) >> 12 {
+            0x8 => {
+                match self.opcode & 0x000F {
+                    0x0 => self.OP_8xy0(),
+                    0x1 => self.OP_8xy1(),
+                    0x2 => self.OP_8xy2(),
+                    0x3 => self.OP_8xy3(),
+                    0x4 => self.OP_8xy4(),
+                    0x5 => self.OP_8xy5(),
+                    0x6 => self.OP_8xy6(),
+                    0x7 => self.OP_8xy7(),
+                    0xE => self.OP_8xyE(),
+                    _ => eprintln!("Erroneous opcode : {}", self.opcode),
+                }
+            },
+            0x0 => {
+                match self.opcode & 0x000F {
+                    0x0 => self.OP_00E0(),
+                    0xE => self.OP_00EE(),
+                    _ => eprintln!("Erroneous opcode : {}", self.opcode),
+                }
+            },
+            0xE => {
+                match self.opcode & 0x000F {
+                    0x1 => self.OP_ExA1(),
+                    0xE => self.OP_Ex9E(),
+                    _ => eprintln!("Erroneous opcode : {}", self.opcode),
+                }
+            },
+            0xF => {
+                match self.opcode & 0x00FF {
+                    0x07 => self.OP_Fx07(),
+                    0x0A => self.OP_Fx0A(),
+                    0x15 => self.OP_Fx15(),
+                    0x18 => self.OP_Fx18(),
+                    0x1E => self.OP_Fx1E(),
+                    0x29 => self.OP_Fx29(),
+                    0x33 => self.OP_Fx33(),
+                    0x55 => self.OP_Fx55(),
+                    0x65 => self.OP_Fx65(),
+                    _ => eprintln!("Erroneous opcode : {}", self.opcode),
+                }
+            },
+            _ => eprintln!("Erroneous opcode : {}", self.opcode),
+
+        }
     }
 }
 
