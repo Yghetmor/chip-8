@@ -1,4 +1,5 @@
-use std::fs::{File, read};
+use std::fs::read;
+use std::process;
 use rand::prelude::*;
 
 const START_ADDRESS: u32 = 0x200;
@@ -35,7 +36,7 @@ pub struct Chip8 {
     sp: u8,
     delay_timer: u8,
     sound_timer: u8,
-    keypad: [u8; 16],
+    pub keypad: [u8; 16],
     video: [u32; 64 * 32],
     opcode: u16,
     rand_byte: u8,
@@ -70,7 +71,10 @@ impl Chip8 {
     }
 
     pub fn load_rom(&mut self, filename: String) {
-        let buf = read(filename).unwrap();
+        let buf = read(filename).unwrap_or_else(|err| {
+            eprintln!("Could not open ROM: {err}");
+            process::exit(1);
+        });
         let mut _i = 0;
         for byte in buf {
             self.memory[START_ADDRESS as usize] = byte;
